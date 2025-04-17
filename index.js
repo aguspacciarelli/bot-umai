@@ -20,19 +20,21 @@ client.once('ready', async () => {
     }
 });
 
-// Función para tokenizar una cadena (simple)
-function tokenize(text) {
-    return text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean);
-}
-
-// Función para escapar caracteres especiales en una cadena para expresiones regulares
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& significa "toda la subcadena coincidente"
-}
-
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Verificar si el bot fue mencionado y el mensaje NO comienza con '!pregunta'
+    if (message.mentions.users.has(client.user.id) && !message.content.startsWith('!pregunta')) {
+        const saludo = `¡Hola ${message.author.username}! :) Soy botiano, el bot académico de UMAI. La siguiente es una lista de comandos que podes usar para que te pueda ayudar:\n\n`;
+        const comandos = [
+            `\`!pregunta <tu_pregunta>\`: Realizá una pregunta académica. Voy a intentar buscar la respuesta en mi base de datos.`,
+            // Puedes agregar más comandos aquí a medida que los implementes
+        ];
+        await message.reply({ content: saludo + comandos.join('\n') });
+        return; // Detener el procesamiento adicional del mensaje
+    }
+
+    // Resto de la lógica para el comando !pregunta (se ejecutará solo si el mensaje comienza con '!pregunta')
     if (message.content.startsWith('!pregunta')) {
         const preguntaUsuario = message.content.slice('!pregunta'.length).trim();
         if (preguntaUsuario) {
@@ -40,7 +42,7 @@ client.on('messageCreate', async (message) => {
                 const db = getDB();
                 const preguntasCollection = db.collection('preguntas_frecuentes');
 
-                // Sugerencias (sin cambios importantes aquí)
+                // Lógica de sugerencias
                 const preguntasEnDB = await preguntasCollection.find().toArray();
                 const tokensUsuario = tokenize(preguntaUsuario);
                 const sugerencias = [];
@@ -85,7 +87,6 @@ client.on('messageCreate', async (message) => {
                         components: filasDeBotones,
                     });
                 } else {
-                    // Búsqueda directa (con escape de caracteres especiales)
                     const preguntaEscapada = escapeRegExp(preguntaUsuario);
                     const resultado = await preguntasCollection.findOne({ pregunta: { $regex: new RegExp(preguntaEscapada, 'i') } });
 
@@ -126,5 +127,14 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 });
+
+// Funciones auxiliares (tokenize y escapeRegExp)
+function tokenize(text) {
+    return text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean);
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 client.login(process.env.DISCORD_TOKEN);
