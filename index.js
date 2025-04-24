@@ -23,18 +23,25 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Verificar si el bot fue mencionado y el mensaje NO comienza con '!pregunta'
-    if (message.mentions.users.has(client.user.id) && !message.content.startsWith('!pregunta')) {
-        const saludo = `¡Hola ${message.author.username}! :) Soy botiano, el bot académico de UMAI. La siguiente es una lista de comandos que podes usar para que te pueda ayudar:\n\n`;
-        const comandos = [
-            `\`!pregunta <tu_pregunta>\`: Realizá una pregunta académica. Voy a intentar buscar la respuesta en mi base de datos.`,
-            // Puedes agregar más comandos aquí a medida que los implementes
+    // Comando !botiano para mostrar el menú
+    if (message.content.startsWith('!botiano')) {
+        const saludoBotiano = `¡Hola ${message.author.username}! :) Soy botiano, tu bot académico de UMAI.\nAquí tienes una lista de los comandos disponibles:\n\n`;
+        const comandosBotiano = [
+            `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
+            // Agrega aquí más comandos a medida que los implementes
         ];
-        await message.reply({ content: saludo + comandos.join('\n') });
+        await message.reply({ content: saludoBotiano + comandosBotiano.join('\n') });
         return; // Detener el procesamiento adicional del mensaje
     }
 
-    // Resto de la lógica para el comando !pregunta (se ejecutará solo si el mensaje comienza con '!pregunta')
+    // Verificar si el bot fue mencionado y el mensaje NO comienza con '!pregunta'
+    if (message.mentions.users.has(client.user.id) && !message.content.startsWith('!pregunta')) {
+        const saludoMencion = `¡Hola ${message.author.username}! :) Parece que me mencionaste. Si tienes una pregunta académica, usa el comando \`!pregunta <tu_pregunta>\`. Si quieres ver la lista de comandos, usa \`!botiano\`.`;
+        await message.reply({ content: saludoMencion });
+        return; // Detener el procesamiento adicional del mensaje
+    }
+
+    // Resto de la lógica para el comando !pregunta
     if (message.content.startsWith('!pregunta')) {
         const preguntaUsuario = message.content.slice('!pregunta'.length).trim();
         if (preguntaUsuario) {
@@ -42,7 +49,7 @@ client.on('messageCreate', async (message) => {
                 const db = getDB();
                 const preguntasCollection = db.collection('preguntas_frecuentes');
 
-                // Lógica de sugerencias
+                // Lógica de sugerencias (tu código existente)
                 const preguntasEnDB = await preguntasCollection.find().toArray();
                 const tokensUsuario = tokenize(preguntaUsuario);
                 const sugerencias = [];
