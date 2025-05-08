@@ -12,6 +12,8 @@
   "dependencies": {
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
-    "mongodb": "^6.15.0"
+    "mongodb": "^6.15.0",
+    "node-fetch": "^3.3.2",
+    "node-ssh": "^13.2.1"
   }
 }
