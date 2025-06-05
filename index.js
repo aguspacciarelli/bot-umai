@@ -41,12 +41,12 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   //if (message.author.bot) return; Ignora mensajes de otro bot
 
-    // comando !botiano para mostrar el menú
+  // comando !botiano para mostrar el menú
   if (message.content.startsWith("!botiano")) {
     const saludoBotiano = `¡Hola ${message.author.username}! :) Soy botiano, tu bot académico de UMAI.\nAquí tienes una lista de los comandos disponibles:\n\n`;
 
     const comandosBotiano = [
-      `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`, 
+      `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
     ];
 
     await message.reply({
@@ -56,7 +56,6 @@ client.on("messageCreate", async (message) => {
     return; // Detener el procesamiento adicional del mensaje
   } // Verificar si el bot fue mencionado y el mensaje NO comienza con '!pregunta'
 
- 
   if (
     message.mentions.users.has(client.user.id) &&
     !message.content.startsWith("!pregunta")
@@ -74,6 +73,8 @@ client.on("messageCreate", async (message) => {
     if (preguntaUsuario) {
       try {
         const db = getDB();
+
+        console.log(db);
 
         const preguntasCollection = db.collection("preguntas_frecuentes"); // sugerencias
 
@@ -120,14 +121,11 @@ client.on("messageCreate", async (message) => {
             const sugerencia = sugerencias[i];
 
             const boton = new ButtonBuilder()
-
               .setCustomId(`pregunta_sugerida_${sugerencia._id}`)
-
               .setLabel(
                 sugerencia.pregunta.slice(0, 80) +
                   (sugerencia.pregunta.length > 80 ? "..." : "")
               )
-
               .setStyle(ButtonStyle.Primary);
 
             botonesEnFila.push(boton);
@@ -176,56 +174,64 @@ client.on("messageCreate", async (message) => {
     }
   }
 
+  // Comando !reservas (modificado para acceder al array 'reservations' y usando la función de filtro)
   if (message.content.startsWith("!reservas")) {
     const fs = require("fs"); // Module to interact with the file system
-  
+
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Absolute path to the file on the VPS
-  
+
     try {
       // Read the file synchronously as text
       const data = fs.readFileSync(rutaArchivo, "utf8");
-  
-      // Parse the text as JSON to convert it to an array of objects
-      const reservas = JSON.parse(data);
-  
-      // If the file is empty or there are no reservations
-      if (!reservas.length) {
+
+      // Parse the text as JSON and access the 'reservations' array inside the object
+      const dataObj = JSON.parse(data);
+      const reservas = dataObj.reservations; // ACCESO CORREGIDO AQUÍ
+
+      // If the file is empty, 'reservations' is not an array, or the array is empty
+      if (!Array.isArray(reservas) || reservas.length === 0) {
         message.reply("No hay reservas registradas actualmente.");
-      return;
+        return;
       }
-  
-      // Format the response in a readable way
-      let respuesta = "**Reservas Actuales:**\n\n";
-  
+
+      const reservasFiltradas = filtrarReservasPorPalabrasClave(reservas); // Usar la función de filtro
+
+      if (reservasFiltradas.length === 0) {
+        message.reply("No hay reservas registradas actualmente que coincidan con las categorías principales.");
+        return;
+      }
+
+      let respuesta = "**Reservas Actuales (Categorías Principales):**\n\n";
+
       // Loop through each reservation and add it to the response
-      reservas.forEach((reserva, index) => {
+      reservasFiltradas.forEach((reserva, index) => { // Iterar sobre las filtradas
         // Convert UTC dates to local time format
         const startDate = new Date(reserva.startDate);
         const endDate = new Date(reserva.endDate);
-        
+
         // Format date as DD/MM/YYYY
         const fecha = startDate.toLocaleDateString('es-ES', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         });
-        
+
         // Format times as HH:MM
         const horaInicio = startDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
         });
-        
+
         const horaFin = endDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
         });
-        
+
         // Add the reservation to the response
         respuesta += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
         respuesta += `   ${reserva.title} - ${reserva.description}\n\n`;
       });
-  
+
       // If the message is too long, split it into multiple messages
       if (respuesta.length > 2000) {
         const chunks = respuesta.match(/.{1,1900}/gs); // Split into chunks of 1900 characters
@@ -240,9 +246,8 @@ client.on("messageCreate", async (message) => {
       message.reply("Hubo un error al acceder a las reservas. Por favor, inténtalo de nuevo más tarde.");
     }
   }
-})
+});
 
- 
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
@@ -300,4 +305,52 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Normaliza una cadena de texto para la comparación (quita tildes y convierte a minúsculas).
+ * @param {string} text La cadena de texto a normalizar.
+ * @returns {string} La cadena de texto normalizada.
+ */
+function normalizeText(text) {
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * Filtra un arreglo de objetos de reserva, devolviendo solo aquellos que contengan
+ * alguna de las palabras clave especificadas en cualquiera de sus campos de texto.
+ * La búsqueda es insensible a mayúsculas/minúsculas y a tildes.
+ *
+ * @param {Array<Object>} reservas El arreglo de objetos de reserva.
+ * @returns {Array<Object>} Un nuevo arreglo con las reservas filtradas.
+ */
+function filtrarReservasPorPalabrasClave(reservas) {
+    const palabrasClave = [
+        "css",
+        "multimedia",
+        "videojuegos",
+        "video juegos",
+        "multi",
+        "tecnologia",
+        "tecnologia multimedial",
+    ];
+
+    const regexPattern = palabrasClave
+        .map(keyword => normalizeText(keyword))
+        .map(keyword => keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+
+    const combinedRegex = new RegExp(regexPattern, "i");
+
+    return reservas.filter(reserva => {
+        const textoReservaNormalizado = Object.values(reserva)
+            .filter(value => typeof value === 'string')
+            .map(value => normalizeText(value))
+            .join(' ');
+
+        return combinedRegex.test(textoReservaNormalizado);
+    });
+}
+
+
 client.login(process.env.DISCORD_TOKEN);
+
+console.log(process.env);
