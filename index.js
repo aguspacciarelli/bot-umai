@@ -181,20 +181,19 @@ client.on("messageCreate", async (message) => {
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Absolute path to the file on the VPS
 
     try {
-      // Read the file synchronously as text
+     
       const data = fs.readFileSync(rutaArchivo, "utf8");
-
-      // Parse the text as JSON and access the 'reservations' array inside the object
+     
       const dataObj = JSON.parse(data);
-      const reservas = dataObj.reservations; // ACCESO CORREGIDO AQUÍ
+      const reservas = dataObj.data.reservations; 
 
-      // If the file is empty, 'reservations' is not an array, or the array is empty
+    
       if (!Array.isArray(reservas) || reservas.length === 0) {
         message.reply("No hay reservas registradas actualmente.");
         return;
       }
 
-      const reservasFiltradas = filtrarReservasPorPalabrasClave(reservas); // Usar la función de filtro
+      const reservasFiltradas = filtrarReservasPorPalabrasClave(reservas);
 
       if (reservasFiltradas.length === 0) {
         message.reply("No hay reservas registradas actualmente que coincidan con las categorías principales.");
@@ -203,20 +202,19 @@ client.on("messageCreate", async (message) => {
 
       let respuesta = "**Reservas Actuales (Categorías Principales):**\n\n";
 
-      // Loop through each reservation and add it to the response
-      reservasFiltradas.forEach((reserva, index) => { // Iterar sobre las filtradas
-        // Convert UTC dates to local time format
+      
+      reservasFiltradas.forEach((reserva, index) => { 
         const startDate = new Date(reserva.startDate);
         const endDate = new Date(reserva.endDate);
 
-        // Format date as DD/MM/YYYY
+        
         const fecha = startDate.toLocaleDateString('es-ES', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         });
 
-        // Format times as HH:MM
+       
         const horaInicio = startDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
@@ -227,14 +225,14 @@ client.on("messageCreate", async (message) => {
           minute: '2-digit'
         });
 
-        // Add the reservation to the response
+      
         respuesta += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
         respuesta += `   ${reserva.title} - ${reserva.description}\n\n`;
       });
 
-      // If the message is too long, split it into multiple messages
+    
       if (respuesta.length > 2000) {
-        const chunks = respuesta.match(/.{1,1900}/gs); // Split into chunks of 1900 characters
+        const chunks = respuesta.match(/.{1,1900}/gs); 
         for (const chunk of chunks) {
           await message.channel.send(chunk);
         }
