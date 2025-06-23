@@ -42,7 +42,7 @@ client.on("messageCreate", async (message) => {
 
     const comandosBotiano = [
       `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
-      `\`!reservas [carrera]\`: Muestra las reservas de aulas. Puedes especificar una carrera (ej: \`!reservas multimedia\`, \`!reservas videojuegos\`) o dejarlo vacío para ver todas.`,
+      `\`!reservas [carrera|día]\`: Muestra las reservas de aulas. Puedes especificar una carrera (ej: \`!reservas multimedia\`, \`!reservas videojuegos\`) o un día (ej: \`!reservas lunes\`).`,
     ];
 
     await message.reply({
@@ -173,7 +173,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // Comando !reservas (modificado para filtrar solo por carrera)
+  // Comando !reservas (modificado para filtrar por día O por carrera)
   if (message.content.startsWith("!reservas")) {
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Ruta absoluta al archivo en la VPS
 
@@ -188,18 +188,45 @@ client.on("messageCreate", async (message) => {
       }
 
       const args = message.content.slice("!reservas".length).trim().toLowerCase().split(" ");
-      const filtroCarrera = args[0] || null; // Captura el término de filtro de carrera
+      const filtroUsuario = args[0] || null; // Captura el término de filtro (día o carrera)
 
       let currentReservations = [];
+      let tipoFiltro = "todas"; // 'todas', 'dia', 'carrera'
       let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
 
-      // --- Definiciones de palabras clave por carrera ---
+      // --- Definiciones de filtros ---
+      const diasSemana = {
+        'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'miércoles': 3,
+        'jueves': 4, 'viernes': 5, 'sabado': 6, 'sábado': 6
+      };
+
       const palabrasClaveMultimedia = ["multimedia", "multi", "tecnologia", "tecnologia multimedial"];
       const palabrasClaveVideojuegos = ["videojuegos", "video juegos"];
 
-      // --- Lógica de filtrado por carrera ---
-      if (filtroCarrera) {
-        if (palabrasClaveMultimedia.includes(filtroCarrera)) {
+      // --- Lógica de filtrado ---
+      if (filtroUsuario) {
+        // Intentar filtrar por día
+        if (diasSemana.hasOwnProperty(filtroUsuario)) {
+          tipoFiltro = "dia";
+          const diaNumero = diasSemana[filtroUsuario];
+          const fechaObjetivo = getNextWeekdayDate(diaNumero, new Date()); // Obtenemos la fecha del día más próximo
+
+          // Formateamos la fecha objetivo para el título del mensaje
+          const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
+          filtroAplicadoTexto = `- ${fechaObjetivo.toLocaleDateString('es-ES', options).replace(/\b\w/g, char => char.toUpperCase()).replace('De ', 'de ')}`;
+
+          currentReservations = reservas.filter(reservation => {
+            const fechaReserva = new Date(reservation.startDate);
+            // Comparamos solo la fecha (día, mes, año)
+            return fechaReserva.getDate() === fechaObjetivo.getDate() &&
+                   fechaReserva.getMonth() === fechaObjetivo.getMonth() &&
+                   fechaReserva.getFullYear() === fechaObjetivo.getFullYear();
+          });
+
+        }
+        // Intentar filtrar por carrera: Multimedia
+        else if (palabrasClaveMultimedia.includes(filtroUsuario)) {
+          tipoFiltro = "carrera";
           filtroAplicadoTexto = `para Multimedia`;
           currentReservations = reservas.filter(reserva => {
             const textoReservaNormalizado = Object.values(reserva)
@@ -209,7 +236,10 @@ client.on("messageCreate", async (message) => {
             const multimediaRegex = new RegExp(palabrasClaveMultimedia.map(k => normalizeText(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
             return multimediaRegex.test(textoReservaNormalizado);
           });
-        } else if (palabrasClaveVideojuegos.includes(filtroCarrera)) {
+        }
+        // Intentar filtrar por carrera: Videojuegos
+        else if (palabrasClaveVideojuegos.includes(filtroUsuario)) {
+          tipoFiltro = "carrera";
           filtroAplicadoTexto = `para Videojuegos`;
           currentReservations = reservas.filter(reserva => {
             const textoReservaNormalizado = Object.values(reserva)
@@ -219,57 +249,86 @@ client.on("messageCreate", async (message) => {
             const videojuegosRegex = new RegExp(palabrasClaveVideojuegos.map(k => normalizeText(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
             return videojuegosRegex.test(textoReservaNormalizado);
           });
-        } else {
-          // Si se especificó un argumento pero no es una carrera válida
-          await message.reply(`Filtro de carrera inválido: "${filtroCarrera}". Por favor, usa: \`multimedia\` o \`videojuegos\`.`);
+        }
+        // Filtro inválido
+        else {
+          await message.reply(`Filtro inválido: "${filtroUsuario}". Por favor, usa un día de la semana (lunes, martes, etc.) o una carrera (multimedia, videojuegos).`);
           return;
         }
       } else {
-        // Si no se especificó ningún filtro de carrera, se usa el filtro general de palabras clave (tu `filtrarReservasPorPalabrasClave` original)
+        // Si no se especificó ningún filtro, se usan todas las reservas filtradas por categorías principales
         currentReservations = filtrarReservasPorPalabrasClave(reservas);
         filtroAplicadoTexto = "disponibles (categorías principales)";
       }
 
       let finalReservations = currentReservations;
+      // Si el filtro fue por día o no hubo filtro, aplicamos el filtro de palabras clave generales también.
+      // Si el filtro fue por carrera, `currentReservations` ya está filtrado por la carrera específica.
+      if (tipoFiltro === "dia" || tipoFiltro === "todas") {
+          finalReservations = filtrarReservasPorPalabrasClave(currentReservations);
+      }
+
 
       if (finalReservations.length === 0) {
         await message.reply(`No se encontraron reservas ${filtroAplicadoTexto} que coincidan con los criterios.`);
         return;
       }
 
-      let respuesta = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
+      // --- Construcción de la respuesta en bloque de código ansi (para el color verde) ---
+      let respuestaBloque = `[2;36m📅 Reservas ${filtroAplicadoTexto}:\n\n`; // Comienza con código ANSI para color azul claro/cian, similar al verde en tu imagen
 
-      finalReservations.forEach((reserva, index) => {
+      finalReservations.forEach((reserva) => {
         const startDate = new Date(reserva.startDate);
-        const endDate = new Date(reserva.endDate);
-
-        const fecha = startDate.toLocaleDateString('es-ES', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
+        // La fecha de finalización no se muestra en el formato de la imagen, solo el inicio.
 
         const horaInicio = startDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
         });
 
-        const horaFin = endDate.toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-
-        respuesta += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
-        respuesta += `    ${reserva.title} - ${reserva.description}\n\n`;
+        // Formato como en la imagen: ⏰ 09:00 - Negocios Digitales\nSala: Aula 508
+        respuestaBloque += `[2;33m⏰ ${horaInicio} - ${reserva.title}\n`; // ⏰ en amarillo
+        respuestaBloque += `[2;35mSala: ${reserva.resourceName}\n\n`; // Sala en magenta (o puedes probar otros colores)
       });
 
-      if (respuesta.length > 2000) {
-        const chunks = respuesta.match(/.{1,1900}/gs);
+      // Asegúrate de cerrar el bloque de código
+      respuestaBloque = "```ansi\n" + respuestaBloque + "```";
+
+      // Discord tiene un límite de 2000 caracteres por mensaje.
+      // Si la respuesta es muy larga, divídela en chunks.
+      if (respuestaBloque.length > 2000) {
+        // En caso de que sea muy larga, se envía como texto plano sin formato ANSI
+        let respuestaNormal = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
+        finalReservations.forEach((reserva, index) => {
+          const startDate = new Date(reserva.startDate);
+          const endDate = new Date(reserva.endDate);
+
+          const fecha = startDate.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          });
+
+          const horaInicio = startDate.toLocaleTimeString('es-ES', {
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          const horaFin = endDate.toLocaleTimeString('es-ES', {
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          respuestaNormal += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
+          respuestaNormal += `    ${reserva.title} - ${reserva.description}\n\n`;
+        });
+
+        const chunks = respuestaNormal.match(/.{1,1900}/gs);
         for (const chunk of chunks) {
           await message.channel.send(chunk);
         }
       } else {
-        await message.reply(respuesta);
+        await message.reply(respuestaBloque);
       }
     } catch (error) {
       console.error("Error al leer o procesar el archivo de reservas:", error);
@@ -384,5 +443,29 @@ function filtrarReservasPorPalabrasClave(reservas) {
     });
 }
 
+/**
+ * Obtiene la fecha del día de la semana más próxima (hoy o en los próximos 7 días).
+ * @param {number} targetDay El día de la semana deseado (0=Domingo, 1=Lunes, ..., 6=Sábado).
+ * @param {Date} referenceDate La fecha de referencia para calcular el día más próximo (normalmente new Date()).
+ * @returns {Date} La fecha del día de la semana más próximo.
+ */
+function getNextWeekdayDate(targetDay, referenceDate = new Date()) {
+    const today = new Date(referenceDate);
+    today.setHours(0, 0, 0, 0); // Establecer a medianoche para comparar solo fechas
+
+    const currentDay = today.getDay(); // 0 (Domingo) - 6 (Sábado)
+    let daysToAdd = targetDay - currentDay;
+
+    // Si el día objetivo ya pasó esta semana o es hoy, y queremos el "más próximo",
+    // si el día ya pasó hoy, ir a la próxima semana
+    // Sino, si es el mismo día, lo consideramos como "el más próximo"
+    if (daysToAdd < 0) {
+        daysToAdd += 7; // Ir a la próxima semana
+    }
+
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + daysToAdd);
+    return nextDate;
+}
 
 client.login(process.env.DISCORD_TOKEN);
