@@ -1,5 +1,4 @@
 //Bibliotecas
-
 require("dotenv").config();
 
 const {
@@ -9,30 +8,26 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-
+const fs = require("fs"); // Módulo para interactuar con el sistema de archivos
+const { ObjectId } = require("mongodb");
 const { connectDB, getDB } = require("./database");
 
-const { ObjectId } = require("mongodb");
 
 //Eventos de los que el bot deberá recibir información
-
 const intents = [
   GatewayIntentBits.Guilds, //Server
-
   GatewayIntentBits.GuildMessages, //Mensajes
-
   GatewayIntentBits.MessageContent, //Contenido de los mensajes
 ];
 
 const client = new Client({ intents }); //Instancia que va a utilizar el bot para interactuar con DS
 
 //Conexión a la base de datos y conecta al bot
-
 client.once("ready", async () => {
   console.log(`¡Bot conectado como ${client.user.tag}!`);
-
   try {
     await connectDB(process.env.MONGODB_URI, "datos_bot");
+    console.log("Conectado a MongoDB desde database.js");
   } catch (error) {
     console.error("Error al conectar a la base de datos:", error);
   }
@@ -47,6 +42,7 @@ client.on("messageCreate", async (message) => {
 
     const comandosBotiano = [
       `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
+      `\`!reservas [carrera]\`: Muestra las reservas de aulas. Puedes especificar una carrera (ej: \`!reservas multimedia\`, \`!reservas videojuegos\`) o dejarlo vacío para ver todas.`,
     ];
 
     await message.reply({
@@ -73,8 +69,11 @@ client.on("messageCreate", async (message) => {
     if (preguntaUsuario) {
       try {
         const db = getDB();
-
-        console.log(db);
+        if (!db) {
+          console.error("No se pudo obtener la instancia de la base de datos.");
+          message.reply("Hubo un error interno al conectar con la base de datos. Por favor, inténtalo de nuevo más tarde.");
+          return;
+        }
 
         const preguntasCollection = db.collection("preguntas_frecuentes"); // sugerencias
 
@@ -174,47 +173,82 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // Comando !reservas (modificado para acceder al array 'reservations' y usando la función de filtro)
+  // Comando !reservas (modificado para filtrar solo por carrera)
   if (message.content.startsWith("!reservas")) {
-    const fs = require("fs"); // Module to interact with the file system
-
-    const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Absolute path to the file on the VPS
+    const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Ruta absoluta al archivo en la VPS
 
     try {
-     
       const data = fs.readFileSync(rutaArchivo, "utf8");
-     
       const dataObj = JSON.parse(data);
-      const reservas = dataObj.data.reservations; 
+      let reservas = dataObj.data.reservations;
 
-    
       if (!Array.isArray(reservas) || reservas.length === 0) {
         message.reply("No hay reservas registradas actualmente.");
         return;
       }
 
-      const reservasFiltradas = filtrarReservasPorPalabrasClave(reservas);
+      const args = message.content.slice("!reservas".length).trim().toLowerCase().split(" ");
+      const filtroCarrera = args[0] || null; // Captura el término de filtro de carrera
 
-      if (reservasFiltradas.length === 0) {
-        message.reply("No hay reservas registradas actualmente que coincidan con las categorías principales.");
+      let currentReservations = [];
+      let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
+
+      // --- Definiciones de palabras clave por carrera ---
+      const palabrasClaveMultimedia = ["multimedia", "multi", "tecnologia", "tecnologia multimedial"];
+      const palabrasClaveVideojuegos = ["videojuegos", "video juegos"];
+
+      // --- Lógica de filtrado por carrera ---
+      if (filtroCarrera) {
+        if (palabrasClaveMultimedia.includes(filtroCarrera)) {
+          filtroAplicadoTexto = `para Multimedia`;
+          currentReservations = reservas.filter(reserva => {
+            const textoReservaNormalizado = Object.values(reserva)
+              .filter(value => typeof value === 'string')
+              .map(value => normalizeText(value))
+              .join(' ');
+            const multimediaRegex = new RegExp(palabrasClaveMultimedia.map(k => normalizeText(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
+            return multimediaRegex.test(textoReservaNormalizado);
+          });
+        } else if (palabrasClaveVideojuegos.includes(filtroCarrera)) {
+          filtroAplicadoTexto = `para Videojuegos`;
+          currentReservations = reservas.filter(reserva => {
+            const textoReservaNormalizado = Object.values(reserva)
+              .filter(value => typeof value === 'string')
+              .map(value => normalizeText(value))
+              .join(' ');
+            const videojuegosRegex = new RegExp(palabrasClaveVideojuegos.map(k => normalizeText(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
+            return videojuegosRegex.test(textoReservaNormalizado);
+          });
+        } else {
+          // Si se especificó un argumento pero no es una carrera válida
+          await message.reply(`Filtro de carrera inválido: "${filtroCarrera}". Por favor, usa: \`multimedia\` o \`videojuegos\`.`);
+          return;
+        }
+      } else {
+        // Si no se especificó ningún filtro de carrera, se usa el filtro general de palabras clave (tu `filtrarReservasPorPalabrasClave` original)
+        currentReservations = filtrarReservasPorPalabrasClave(reservas);
+        filtroAplicadoTexto = "disponibles (categorías principales)";
+      }
+
+      let finalReservations = currentReservations;
+
+      if (finalReservations.length === 0) {
+        await message.reply(`No se encontraron reservas ${filtroAplicadoTexto} que coincidan con los criterios.`);
         return;
       }
 
-      let respuesta = "**Reservas Actuales (Categorías Principales):**\n\n";
+      let respuesta = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
 
-      
-      reservasFiltradas.forEach((reserva, index) => { 
+      finalReservations.forEach((reserva, index) => {
         const startDate = new Date(reserva.startDate);
         const endDate = new Date(reserva.endDate);
 
-        
         const fecha = startDate.toLocaleDateString('es-ES', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         });
 
-       
         const horaInicio = startDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
@@ -225,14 +259,12 @@ client.on("messageCreate", async (message) => {
           minute: '2-digit'
         });
 
-      
         respuesta += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
-        respuesta += `   ${reserva.title} - ${reserva.description}\n\n`;
+        respuesta += `    ${reserva.title} - ${reserva.description}\n\n`;
       });
 
-    
       if (respuesta.length > 2000) {
-        const chunks = respuesta.match(/.{1,1900}/gs); 
+        const chunks = respuesta.match(/.{1,1900}/gs);
         for (const chunk of chunks) {
           await message.channel.send(chunk);
         }
@@ -241,7 +273,7 @@ client.on("messageCreate", async (message) => {
       }
     } catch (error) {
       console.error("Error al leer o procesar el archivo de reservas:", error);
-      message.reply("Hubo un error al acceder a las reservas. Por favor, inténtalo de nuevo más tarde.");
+      await message.reply("Hubo un error al acceder a las reservas. Por favor, inténtalo de nuevo más tarde.");
     }
   }
 });
@@ -255,9 +287,16 @@ client.on("interactionCreate", async (interaction) => {
 
     try {
       const db = getDB();
+      if (!db) {
+          console.error("No se pudo obtener la instancia de la base de datos para interacción.");
+          await interaction.reply({
+              content: "Hubo un error interno al conectar con la base de datos. Por favor, inténtalo de nuevo más tarde.",
+              ephemeral: true
+          });
+          return;
+      }
 
       const preguntasCollection = db.collection("preguntas_frecuentes");
-
       const resultado = await preguntasCollection.findOne({
         _id: new ObjectId(preguntaId),
       });
@@ -278,7 +317,6 @@ client.on("interactionCreate", async (interaction) => {
         "Error al buscar la respuesta de la pregunta sugerida:",
         error
       );
-
       await interaction.reply({
         content: "Hubo un error al obtener la respuesta.",
         ephemeral: true,
@@ -289,7 +327,6 @@ client.on("interactionCreate", async (interaction) => {
 
 function tokenize(text) {
   //cadena de texto en minúscula, elimina caractéres, divide la palabra y filtra
-
   return text
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
@@ -298,7 +335,6 @@ function tokenize(text) {
 }
 
 //escapa de los caractéres especiales
-
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -350,5 +386,3 @@ function filtrarReservasPorPalabrasClave(reservas) {
 
 
 client.login(process.env.DISCORD_TOKEN);
-
-console.log(process.env);
