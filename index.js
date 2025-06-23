@@ -45,9 +45,8 @@ client.on("messageCreate", async (message) => {
       `\`!reservas [carrera]\`: Muestra las reservas de aulas. Puedes especificar una carrera (ej: \`!reservas multimedia\`, \`!reservas videojuegos\`) o dejarlo vacío para ver todas.`,
     ];
 
-    // Se envían los comandos en un bloque de código
     await message.reply({
-      content: "```ansi\n[2;36m" + saludoBotiano + comandosBotiano.join("\n") + "```",
+      content: saludoBotiano + comandosBotiano.join("\n"),
     });
 
     return; // Detener el procesamiento adicional del mensaje
@@ -174,7 +173,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // Comando !reservas (modificado para filtrar solo por carrera y en bloque de código)
+  // Comando !reservas (modificado para filtrar solo por carrera)
   if (message.content.startsWith("!reservas")) {
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Ruta absoluta al archivo en la VPS
 
@@ -217,7 +216,7 @@ client.on("messageCreate", async (message) => {
               .filter(value => typeof value === 'string')
               .map(value => normalizeText(value))
               .join(' ');
-            const videojuegosRegex = new RegExp(palabrasClaveVideojuegos.map(k => normalizeText(k).replace(/[.*++?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
+            const videojuegosRegex = new RegExp(palabrasClaveVideojuegos.map(k => normalizeText(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), "i");
             return videojuegosRegex.test(textoReservaNormalizado);
           });
         } else {
@@ -238,73 +237,39 @@ client.on("messageCreate", async (message) => {
         return;
       }
 
-      // --- Construcción de la respuesta en bloque de código ansi (para el color verde) ---
-      let respuestaBloque = `[2;36m📅 Reservas ${filtroAplicadoTexto}:\n\n`; // Comienza con código ANSI para color azul claro/cian, similar al verde en tu imagen
+      let respuesta = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
 
-      // Obtener la fecha actual para el título (Lunes 23/06)
-      const today = new Date();
-      const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
-      const formattedDate = today.toLocaleDateString('es-ES', options)
-          .replace(/\b\w/g, char => char.toUpperCase()) // Capitalizar la primera letra de cada palabra (ej. "lunes" a "Lunes")
-          .replace('De ', 'de '); // Corregir "De" a "de" si aparece
-
-      respuestaBloque = `[2;36m📅 Reservas - ${formattedDate}\n\n`; // Título como en la imagen
-
-      finalReservations.forEach((reserva) => {
+      finalReservations.forEach((reserva, index) => {
         const startDate = new Date(reserva.startDate);
-        //const endDate = new Date(reserva.endDate); // No se usa directamente en el formato de la imagen
+        const endDate = new Date(reserva.endDate);
+
+        const fecha = startDate.toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
 
         const horaInicio = startDate.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
         });
 
-        // Formato como en la imagen: ⏰ 09:00 - Negocios Digitales\nSala: Aula 508
-        respuestaBloque += `[2;33m⏰ ${horaInicio} - ${reserva.title}\n`; // ⏰ en amarillo
-        respuestaBloque += `[2;35mSala: ${reserva.resourceName}\n\n`; // Sala en magenta (o puedes probar otros colores)
-      });
-
-      // Asegúrate de cerrar el bloque de código
-      respuestaBloque = "```ansi\n" + respuestaBloque + "```";
-
-      // Discord tiene un límite de 2000 caracteres por mensaje.
-      // Si la respuesta es muy larga, divídela en chunks.
-      if (respuestaBloque.length > 2000) {
-        // Aquí podrías necesitar una lógica más sofisticada si los chunks rompen la sintaxis ANSI.
-        // Para simplificar, si el bloque es demasiado grande, quizás sea mejor enviarlo como texto plano.
-        // O dividirlo con cuidado para que cada chunk sea un bloque ANSI válido.
-        // Por ahora, si es demasiado grande, lo enviamos como texto normal sin el formato ANSI.
-        let respuestaNormal = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
-        finalReservations.forEach((reserva, index) => {
-          const startDate = new Date(reserva.startDate);
-          const endDate = new Date(reserva.endDate);
-
-          const fecha = startDate.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          });
-
-          const horaInicio = startDate.toLocaleTimeString('es-ES', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-
-          const horaFin = endDate.toLocaleTimeString('es-ES', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-
-          respuestaNormal += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
-          respuestaNormal += `    ${reserva.title} - ${reserva.description}\n\n`;
+        const horaFin = endDate.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit'
         });
 
-        const chunks = respuestaNormal.match(/.{1,1900}/gs);
+        respuesta += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
+        respuesta += `    ${reserva.title} - ${reserva.description}\n\n`;
+      });
+
+      if (respuesta.length > 2000) {
+        const chunks = respuesta.match(/.{1,1900}/gs);
         for (const chunk of chunks) {
           await message.channel.send(chunk);
         }
       } else {
-        await message.reply(respuestaBloque);
+        await message.reply(respuesta);
       }
     } catch (error) {
       console.error("Error al leer o procesar el archivo de reservas:", error);
