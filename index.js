@@ -200,7 +200,7 @@ client.on("messageCreate", async (message) => {
         'jueves': 4, 'viernes': 5, 'sabado': 6, 'sábado': 6
       };
 
-      const palabrasClaveMultimedia = ["multimedia", "multi", "tecnologia", "tecnologia multimedial"];
+      const palabrasClaveMultimedia = ["multimedia", "multi", "multimedial"];
       const palabrasClaveVideojuegos = ["videojuegos", "video juegos"];
 
       // --- Lógica de filtrado ---
@@ -422,8 +422,7 @@ function filtrarReservasPorPalabrasClave(reservas) {
         "videojuegos",
         "video juegos",
         "multi",
-        "tecnologia",
-        "tecnologia multimedial",
+        "multimedial",
     ];
 
     const regexPattern = palabrasClave
