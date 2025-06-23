@@ -278,10 +278,11 @@ client.on("messageCreate", async (message) => {
       let respuestaBloque = `[2;36m📅 Reservas ${filtroAplicadoTexto}:\n\n`; // Comienza con código ANSI para color azul claro/cian, similar al verde en tu imagen
 
       finalReservations.forEach((reserva) => {
-        const startDate = new Date(reserva.startDate);
-        // La fecha de finalización no se muestra en el formato de la imagen, solo el inicio.
+        // CREAR UNA NUEVA INSTANCIA DE FECHA PARA CADA RESERVA Y RESTAR LAS HORAS
+        const startDateAdjusted = new Date(reserva.startDate);
+        startDateAdjusted.setHours(startDateAdjusted.getHours() - 3); // Restar 3 horas
 
-        const horaInicio = startDate.toLocaleTimeString('es-ES', {
+        const horaInicio = startDateAdjusted.toLocaleTimeString('es-ES', { // Usar la fecha ajustada
           hour: '2-digit',
           minute: '2-digit'
         });
@@ -300,26 +301,25 @@ client.on("messageCreate", async (message) => {
         // En caso de que sea muy larga, se envía como texto plano sin formato ANSI
         let respuestaNormal = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
         finalReservations.forEach((reserva, index) => {
-          const startDate = new Date(reserva.startDate);
-          const endDate = new Date(reserva.endDate);
+          // Ajustar también aquí si se usa la versión normal
+          const startDateAdjusted = new Date(reserva.startDate);
+          startDateAdjusted.setHours(startDateAdjusted.getHours() - 3); // Restar 3 horas
 
-          const fecha = startDate.toLocaleDateString('es-ES', {
+          const fecha = startDateAdjusted.toLocaleDateString('es-ES', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric'
           });
 
-          const horaInicio = startDate.toLocaleTimeString('es-ES', {
+          const horaInicio = startDateAdjusted.toLocaleTimeString('es-ES', {
             hour: '2-digit',
             minute: '2-digit'
           });
 
-          const horaFin = endDate.toLocaleTimeString('es-ES', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
+          const horaFin = new Date(reserva.endDate); // Aquí la fecha de fin no se ajusta, considerar si necesitas ajustar también endDate
+          horaFin.setHours(horaFin.getHours() - 3);
 
-          respuestaNormal += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin})\n`;
+          respuestaNormal += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})\n`;
           respuestaNormal += `    ${reserva.title} - ${reserva.description}\n\n`;
         });
 
@@ -456,11 +456,12 @@ function getNextWeekdayDate(targetDay, referenceDate = new Date()) {
     const currentDay = today.getDay(); // 0 (Domingo) - 6 (Sábado)
     let daysToAdd = targetDay - currentDay;
 
-    // Si el día objetivo ya pasó esta semana o es hoy, y queremos el "más próximo",
-    // si el día ya pasó hoy, ir a la próxima semana
-    // Sino, si es el mismo día, lo consideramos como "el más próximo"
+    // Si el día objetivo ya pasó esta semana, súmale 7 para ir a la próxima semana
+    // O si el día objetivo es hoy, pero ya pasó la hora del cálculo original.
+    // Para simplificar, si el día objetivo es igual al día actual y ya pasó, o si es un día anterior,
+    // se va a la siguiente semana.
     if (daysToAdd < 0) {
-        daysToAdd += 7; // Ir a la próxima semana
+        daysToAdd += 7;
     }
 
     const nextDate = new Date(today);
