@@ -194,7 +194,7 @@ client.on("messageCreate", async (message) => {
       let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
 
       // --- Definiciones de palabras clave por carrera ---
-      const palabrasClaveMultimedia = ["multimedia", "multi", "tecnologia", "tecnologia multimedial"];
+      const palabrasClaveMultimedia = ["multimedia", "multi", "tecnologia multimedial"];
       const palabrasClaveVideojuegos = ["videojuegos", "video juegos"];
 
       // --- Lógica de filtrado por carrera ---
@@ -363,7 +363,6 @@ function filtrarReservasPorPalabrasClave(reservas) {
         "videojuegos",
         "video juegos",
         "multi",
-        "tecnologia",
         "tecnologia multimedial",
     ];
 
