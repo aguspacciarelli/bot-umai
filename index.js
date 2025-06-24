@@ -42,7 +42,7 @@ client.on("messageCreate", async (message) => {
 
     const comandosBotiano = [
       `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
-      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`, \`!reservas sabado\`).`,
+      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`).`,
     ];
 
     await message.reply({
@@ -196,30 +196,27 @@ client.on("messageCreate", async (message) => {
       };
 
       let currentReservations = [];
-      let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
+      let filtroAplicadoTexto = "";
 
       if (!filtroDiaUsuario || !diasSemana.hasOwnProperty(filtroDiaUsuario)) {
-        await message.reply("Para ver las reservas, por favor, especifica un día de la semana. Por ejemplo: `!reservas lunes` o `!reservas sabado`.");
+        await message.reply("Para ver las reservas especificá un día de la semana. Por ejemplo: `!reservas lunes` o `!reservas sabado`.");
         return;
       }
 
       const diaNumero = diasSemana[filtroDiaUsuario];
       const fechaObjetivo = getNextWeekdayDate(diaNumero, new Date()); // Obtenemos la fecha del día más próximo
 
-      // Formateamos la fecha objetivo para el título del mensaje
       const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
       filtroAplicadoTexto = `- ${fechaObjetivo.toLocaleDateString('es-ES', options).replace(/\b\w/g, char => char.toUpperCase()).replace('De ', 'de ')}`;
 
       currentReservations = reservas.filter(reservation => {
         const fechaReserva = new Date(reservation.startDate);
-        // Comparamos solo la fecha (día, mes, año)
+   
         return fechaReserva.getDate() === fechaObjetivo.getDate() &&
                fechaReserva.getMonth() === fechaObjetivo.getMonth() &&
                fechaReserva.getFullYear() === fechaObjetivo.getFullYear();
       });
 
-      // Aplicamos el filtro de palabras clave generales a las reservas del día encontrado
-      // Esto asegura que solo las reservas relevantes se muestren para ese día.
       let finalReservations = filtrarReservasPorPalabrasClave(currentReservations);
 
 
@@ -229,7 +226,7 @@ client.on("messageCreate", async (message) => {
       }
 
       // --- Construcción de la respuesta en bloque de código (texto blanco, sin ANSI colors) ---
-      let respuestaBloque = `📅 Reservas ${filtroAplicadoTexto}:\n\n`; // Sin código ANSI al inicio para el título
+      let respuestaBloque = `📅 Reservas ${filtroAplicadoTexto}:\n\n`;
 
       finalReservations.forEach((reserva) => {
         const startDateAdjusted = new Date(reserva.startDate);
@@ -240,13 +237,10 @@ client.on("messageCreate", async (message) => {
           minute: '2-digit'
         });
 
-        // Formato: ⏰ 09:00 - Negocios Digitales\nSala: Aula 508
-        // Sin códigos ANSI de color para el texto interno
         respuestaBloque += `⏰ ${horaInicio} - ${reserva.title}\n`;
         respuestaBloque += `Sala: ${reserva.resourceName}\n\n`;
       });
 
-      // Asegúrate de cerrar el bloque de código
       respuestaBloque = "```\n" + respuestaBloque + "```"; // Solo "```" para bloque de texto plano
 
       // Discord tiene un límite de 2000 caracteres por mensaje.
