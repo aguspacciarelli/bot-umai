@@ -253,7 +253,7 @@ client.on("messageCreate", async (message) => {
 
         // Añadir un campo para cada reserva
         embed.addFields({
-          name: `⏰${horaInicio} - ${reserva.title}`,
+          name: `⏰${horaInicio} - ${reserva.description}`,
           value: reserva.resourceName,
           inline: false
         });
