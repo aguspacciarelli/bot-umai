@@ -237,7 +237,7 @@ client.on("messageCreate", async (message) => {
 
       // --- CREACIÓN DEL EMBED ---
       const embed = new EmbedBuilder()
-        .setColor(0x0099FF) // Un color hexadecimal (ej. azul claro). Puedes elegir el que quieras.
+        .setColor(0xB66C54) // Color
         .setTitle(`📅Reservas para ${filtroAplicadoTexto}`) // Título del embed
         .setDescription('Aulas reservadas:') // Descripción general del embed
 
