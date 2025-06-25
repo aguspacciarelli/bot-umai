@@ -207,8 +207,18 @@ client.on("messageCreate", async (message) => {
       const diaNumero = diasSemana[filtroDiaUsuario];
       const fechaObjetivo = getNextWeekdayDate(diaNumero, new Date()); // Obtenemos la fecha del día más próximo
 
-      const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
-      filtroAplicadoTexto = `${fechaObjetivo.toLocaleDateString('es-ES', options).replace(/\b\w/g, char => char.toUpperCase()).replace('De ', 'de ')}`;
+      // --- CAMBIO AQUÍ: Formateo más preciso del día de la semana ---
+      const optionsWeekday = { weekday: 'long' };
+      const nombreDiaCompleto = fechaObjetivo.toLocaleDateString('es-ES', optionsWeekday); // Ej: "lunes", "miércoles"
+
+      // Capitalizar solo la primera letra del nombre del día
+      const diaCapitalizado = nombreDiaCompleto.charAt(0).toUpperCase() + nombreDiaCompleto.slice(1);
+
+      const optionsDate = { day: '2-digit', month: '2-digit' };
+      const fechaCorta = fechaObjetivo.toLocaleDateString('es-ES', optionsDate);
+
+      filtroAplicadoTexto = `${diaCapitalizado}, ${fechaCorta}`;
+      // --- FIN CAMBIO ---
 
       currentReservations = reservas.filter(reservation => {
         const fechaReserva = new Date(reservation.startDate);
@@ -228,10 +238,8 @@ client.on("messageCreate", async (message) => {
       // --- CREACIÓN DEL EMBED ---
       const embed = new EmbedBuilder()
         .setColor(0x0099FF) // Un color hexadecimal (ej. azul claro). Puedes elegir el que quieras.
-        .setTitle(`📅 Reservas para ${filtroAplicadoTexto}`) // Título del embed
-        .setDescription('Aquí tienes las aulas reservadas:') // Descripción general del embed
-        .setTimestamp() // Añade la fecha y hora actual al pie del embed
-        .setFooter({ text: 'UMAI Bot' }); // Texto de pie de página
+        .setTitle(`📅Reservas para ${filtroAplicadoTexto}`) // Título del embed
+        .setDescription('Aulas reservadas:') // Descripción general del embed
 
       // Añadir campos al embed para cada reserva
       finalReservations.forEach((reserva) => {
@@ -244,25 +252,14 @@ client.on("messageCreate", async (message) => {
         });
 
         // Añadir un campo para cada reserva
-        // field.name es el título del campo, field.value es el contenido
-        // inline: true hace que los campos se pongan uno al lado del otro si hay espacio
         embed.addFields({
-          name: `⏰ ${horaInicio} - ${reserva.description}`,
-          value: `Materia: ${reserva.description}\nSala: ${reserva.resourceName}`,
-          inline: false // false para que cada reserva vaya en una línea nueva
+          name: `⏰${horaInicio} - ${reserva.title}`,
+          value: `Aula: ${reserva.resourceName}`,
+          inline: false
         });
       });
 
-      // Discord tiene un límite en el número de caracteres por embed y por campo.
-      // También tiene un límite de 25 campos por embed.
-      // Si hay muchas reservas, podrías necesitar enviar múltiples embeds.
-      // Aquí, por simplicidad, se asume que caben en un solo embed o se manejan los chunks como antes.
-      // La limitación de 25 campos es la más común para las listas.
-      // Si tienes más de 25 reservas, este código enviaría un solo embed con los primeros 25 campos.
-      // Para manejar más de 25, necesitarías un bucle que cree múltiples embeds y los envíe.
-      // Pero por ahora, con 25 campos es bastante.
-
-      await message.reply({ embeds: [embed] }); // Enviar el embed
+      await message.reply({ embeds: [embed] });
 
     } catch (error) {
       console.error("Error al leer o procesar el archivo de reservas:", error);
