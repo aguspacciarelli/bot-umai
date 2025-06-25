@@ -7,6 +7,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder // <-- Importar EmbedBuilder
 } = require("discord.js");
 const fs = require("fs"); // Módulo para interactuar con el sistema de archivos
 const { ObjectId } = require("mongodb");
@@ -42,7 +43,7 @@ client.on("messageCreate", async (message) => {
 
     const comandosBotiano = [
       `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
-      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`).`,
+      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`, \`!reservas sabado\`).`,
     ];
 
     await message.reply({
@@ -173,7 +174,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // Comando !reservas (ahora solo acepta día de la semana)
+  // Comando !reservas (ahora usa Embeds)
   if (message.content.startsWith("!reservas")) {
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Ruta absoluta al archivo en la VPS
 
@@ -196,10 +197,10 @@ client.on("messageCreate", async (message) => {
       };
 
       let currentReservations = [];
-      let filtroAplicadoTexto = "";
+      let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
 
       if (!filtroDiaUsuario || !diasSemana.hasOwnProperty(filtroDiaUsuario)) {
-        await message.reply("Para ver las reservas especificá un día de la semana. Por ejemplo: `!reservas lunes` o `!reservas sabado`.");
+        await message.reply("Para ver las reservas, por favor, especifica un día de la semana. Por ejemplo: `!reservas lunes` o `!reservas sabado`.");
         return;
       }
 
@@ -207,11 +208,10 @@ client.on("messageCreate", async (message) => {
       const fechaObjetivo = getNextWeekdayDate(diaNumero, new Date()); // Obtenemos la fecha del día más próximo
 
       const options = { weekday: 'long', day: '2-digit', month: '2-digit' };
-      filtroAplicadoTexto = `- ${fechaObjetivo.toLocaleDateString('es-ES', options).replace(/\b\w/g, char => char.toUpperCase()).replace('De ', 'de ')}`;
+      filtroAplicadoTexto = `${fechaObjetivo.toLocaleDateString('es-ES', options).replace(/\b\w/g, char => char.toUpperCase()).replace('De ', 'de ')}`;
 
       currentReservations = reservas.filter(reservation => {
         const fechaReserva = new Date(reservation.startDate);
-   
         return fechaReserva.getDate() === fechaObjetivo.getDate() &&
                fechaReserva.getMonth() === fechaObjetivo.getMonth() &&
                fechaReserva.getFullYear() === fechaObjetivo.getFullYear();
@@ -221,13 +221,19 @@ client.on("messageCreate", async (message) => {
 
 
       if (finalReservations.length === 0) {
-        await message.reply(`No se encontraron reservas ${filtroAplicadoTexto} que coincidan con los criterios o con las categorías principales.`);
+        await message.reply(`No se encontraron reservas para ${filtroAplicadoTexto} que coincidan con los criterios o con las categorías principales.`);
         return;
       }
 
-      // --- Construcción de la respuesta en bloque de código (texto blanco, sin ANSI colors) ---
-      let respuestaBloque = `📅 Reservas ${filtroAplicadoTexto}:\n\n`;
+      // --- CREACIÓN DEL EMBED ---
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF) // Un color hexadecimal (ej. azul claro). Puedes elegir el que quieras.
+        .setTitle(`📅 Reservas para ${filtroAplicadoTexto}`) // Título del embed
+        .setDescription('Aquí tienes las aulas reservadas:') // Descripción general del embed
+        .setTimestamp() // Añade la fecha y hora actual al pie del embed
+        .setFooter({ text: 'UMAI Bot' }); // Texto de pie de página
 
+      // Añadir campos al embed para cada reserva
       finalReservations.forEach((reserva) => {
         const startDateAdjusted = new Date(reserva.startDate);
         startDateAdjusted.setHours(startDateAdjusted.getHours() - 3); // Restar 3 horas
@@ -237,46 +243,27 @@ client.on("messageCreate", async (message) => {
           minute: '2-digit'
         });
 
-        respuestaBloque += `⏰ ${horaInicio} - ${reserva.title}\n`;
-        respuestaBloque += `Sala: ${reserva.resourceName}\n\n`;
+        // Añadir un campo para cada reserva
+        // field.name es el título del campo, field.value es el contenido
+        // inline: true hace que los campos se pongan uno al lado del otro si hay espacio
+        embed.addFields({
+          name: `⏰ ${horaInicio} - ${reserva.description}`,
+          value: `Materia: ${reserva.description}\nSala: ${reserva.resourceName}`,
+          inline: false // false para que cada reserva vaya en una línea nueva
+        });
       });
 
-      respuestaBloque = "```\n" + respuestaBloque + "```"; // Solo "```" para bloque de texto plano
+      // Discord tiene un límite en el número de caracteres por embed y por campo.
+      // También tiene un límite de 25 campos por embed.
+      // Si hay muchas reservas, podrías necesitar enviar múltiples embeds.
+      // Aquí, por simplicidad, se asume que caben en un solo embed o se manejan los chunks como antes.
+      // La limitación de 25 campos es la más común para las listas.
+      // Si tienes más de 25 reservas, este código enviaría un solo embed con los primeros 25 campos.
+      // Para manejar más de 25, necesitarías un bucle que cree múltiples embeds y los envíe.
+      // Pero por ahora, con 25 campos es bastante.
 
-      // Discord tiene un límite de 2000 caracteres por mensaje.
-      // Si la respuesta es muy larga, divídela en chunks.
-      if (respuestaBloque.length > 2000) {
-        // Si es muy larga, enviar como texto normal sin el bloque de código (Discord no lo permite dividir así)
-        let respuestaNormal = `**Reservas ${filtroAplicadoTexto}:**\n\n`;
-        finalReservations.forEach((reserva, index) => {
-          const startDateAdjusted = new Date(reserva.startDate);
-          startDateAdjusted.setHours(startDateAdjusted.getHours() - 3);
+      await message.reply({ embeds: [embed] }); // Enviar el embed
 
-          const fecha = startDateAdjusted.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          });
-
-          const horaInicio = startDateAdjusted.toLocaleTimeString('es-ES', {
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-
-          const horaFin = new Date(reserva.endDate);
-          horaFin.setHours(horaFin.getHours() - 3);
-
-          respuestaNormal += `${index + 1}. **${reserva.resourceName}** - ${fecha} (${horaInicio} a ${horaFin.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })})\n`;
-          respuestaNormal += `    ${reserva.title} - ${reserva.description}\n\n`;
-        });
-
-        const chunks = respuestaNormal.match(/.{1,1900}/gs);
-        for (const chunk of chunks) {
-          await message.channel.send(chunk);
-        }
-      } else {
-        await message.reply(respuestaBloque);
-      }
     } catch (error) {
       console.error("Error al leer o procesar el archivo de reservas:", error);
       await message.reply("Hubo un error al acceder a las reservas. Por favor, inténtalo de nuevo más tarde.");
@@ -369,8 +356,7 @@ function filtrarReservasPorPalabrasClave(reservas) {
         "videojuegos",
         "video juegos",
         "multi",
-        "tecnologia",
-        "tecnologia multimedial",
+        "multimedial",
     ];
 
     const regexPattern = palabrasClave
