@@ -7,12 +7,11 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder // <-- Importar EmbedBuilder
+  EmbedBuilder
 } = require("discord.js");
-const fs = require("fs"); // Módulo para interactuar con el sistema de archivos
+const fs = require("fs");
 const { ObjectId } = require("mongodb");
 const { connectDB, getDB } = require("./database");
-
 
 //Eventos de los que el bot deberá recibir información
 const intents = [
@@ -21,9 +20,9 @@ const intents = [
   GatewayIntentBits.MessageContent, //Contenido de los mensajes
 ];
 
-const client = new Client({ intents }); //Instancia que va a utilizar el bot para interactuar con DS
+const client = new Client({ intents });
 
-//Conexión a la base de datos y conecta al bot
+//Conexión a la base de datos y conexión con el bot
 client.once("ready", async () => {
   console.log(`¡Bot conectado como ${client.user.tag}!`);
   try {
@@ -35,23 +34,21 @@ client.once("ready", async () => {
 });
 
 client.on("messageCreate", async (message) => {
-  //if (message.author.bot) return; Ignora mensajes de otro bot
 
-  // comando !botiano para mostrar el menú
   if (message.content.startsWith("!botiano")) {
-    const saludoBotiano = `¡Hola ${message.author.username}! :) Soy botiano, tu bot académico de UMAI.\nAquí tienes una lista de los comandos disponibles:\n\n`;
+    const saludoBotiano = `¡Hola ${message.author.username}! :) Soy botiano, tu bot académico de UMAI.\nAcá tenés una lista de los comandos disponibles:\n\n`;
 
     const comandosBotiano = [
-      `\`!pregunta <tu_pregunta>\`: Realiza una pregunta académica. Intentaré buscar la respuesta en mi base de datos.`,
-      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`, \`!reservas sabado\`).`,
+      `\`!pregunta <tu_pregunta>\`: Haceme una pregunta académica. Voy a intentar buscar la respuesta en mi base de datos.`,
+      `\`!reservas <día>\`: Muestra las reservas de aulas para el día de la semana especificado (ej: \`!reservas lunes\`.`,
     ];
 
     await message.reply({
       content: saludoBotiano + comandosBotiano.join("\n"),
     });
 
-    return; // Detener el procesamiento adicional del mensaje
-  } // Verificar si el bot fue mencionado y el mensaje NO comienza con '!pregunta'
+    return;
+  }
 
   if (
     message.mentions.users.has(client.user.id) &&
@@ -72,11 +69,11 @@ client.on("messageCreate", async (message) => {
         const db = getDB();
         if (!db) {
           console.error("No se pudo obtener la instancia de la base de datos.");
-          message.reply("Hubo un error interno al conectar con la base de datos. Por favor, inténtalo de nuevo más tarde.");
+          message.reply("Hubo un error interno. Por favor, intentalo de nuevo más tarde.");
           return;
         }
 
-        const preguntasCollection = db.collection("preguntas_frecuentes"); // sugerencias
+        const preguntasCollection = db.collection("preguntas_frecuentes"); // Sugerencias
 
         const preguntasEnDB = await preguntasCollection.find().toArray();
 
@@ -165,16 +162,15 @@ client.on("messageCreate", async (message) => {
       } catch (error) {
         console.error("Error al buscar o sugerir preguntas:", error);
 
-        message.reply("Hubo un error al procesar tu pregunta.");
+        message.reply("Hubo un error al procesar tu pregunta :(");
       }
     } else {
       message.reply(
-        "Por favor, incluye tu pregunta después del comando `!pregunta`."
+        "Por favor, incluí tu pregunta después del comando `!pregunta`."
       );
     }
   }
 
-  // Comando !reservas (ahora usa Embeds)
   if (message.content.startsWith("!reservas")) {
     const rutaArchivo = "/home/dawi/DOCKER/apiAulas/data/reservations.json"; // Ruta absoluta al archivo en la VPS
 
@@ -189,7 +185,7 @@ client.on("messageCreate", async (message) => {
       }
 
       const args = message.content.slice("!reservas".length).trim().toLowerCase().split(" ");
-      const filtroDiaUsuario = args[0] || null; // Captura el término de filtro (debe ser un día)
+      const filtroDiaUsuario = args[0] || null; // Captura el término de filtro (tiene que ser un día)
 
       const diasSemana = {
         'domingo': 0, 'lunes': 1, 'martes': 2, 'miercoles': 3, 'miércoles': 3,
@@ -200,25 +196,25 @@ client.on("messageCreate", async (message) => {
       let filtroAplicadoTexto = ""; // Para el mensaje de respuesta
 
       if (!filtroDiaUsuario || !diasSemana.hasOwnProperty(filtroDiaUsuario)) {
-        await message.reply("Para ver las reservas, por favor, especifica un día de la semana. Por ejemplo: `!reservas lunes` o `!reservas sabado`.");
+        await message.reply("Para ver las reservas, por favor, especifica un día de la semana. Por ejemplo: `!reservas lunes`.");
         return;
       }
 
       const diaNumero = diasSemana[filtroDiaUsuario];
       const fechaObjetivo = getNextWeekdayDate(diaNumero, new Date()); // Obtenemos la fecha del día más próximo
 
-      // --- CAMBIO AQUÍ: Formateo más preciso del día de la semana ---
+   
       const optionsWeekday = { weekday: 'long' };
-      const nombreDiaCompleto = fechaObjetivo.toLocaleDateString('es-ES', optionsWeekday); // Ej: "lunes", "miércoles"
+      const nombreDiaCompleto = fechaObjetivo.toLocaleDateString('es-ES', optionsWeekday);
 
-      // Capitalizar solo la primera letra del nombre del día
+    
       const diaCapitalizado = nombreDiaCompleto.charAt(0).toUpperCase() + nombreDiaCompleto.slice(1);
 
       const optionsDate = { day: '2-digit', month: '2-digit' };
       const fechaCorta = fechaObjetivo.toLocaleDateString('es-ES', optionsDate);
 
       filtroAplicadoTexto = `${diaCapitalizado}, ${fechaCorta}`;
-      // --- FIN CAMBIO ---
+    
 
       currentReservations = reservas.filter(reservation => {
         const fechaReserva = new Date(reservation.startDate);
@@ -235,23 +231,22 @@ client.on("messageCreate", async (message) => {
         return;
       }
 
-      // --- CREACIÓN DEL EMBED ---
+    
       const embed = new EmbedBuilder()
         .setColor(0xB66C54) // Color
-        .setTitle(`📅Reservas para ${filtroAplicadoTexto}`) // Título del embed
-        .setDescription('Aulas reservadas:') // Descripción general del embed
+        .setTitle(`📅Reservas para ${filtroAplicadoTexto}`)
+        .setDescription('Aulas reservadas:')
 
-      // Añadir campos al embed para cada reserva
+
       finalReservations.forEach((reserva) => {
         const startDateAdjusted = new Date(reserva.startDate);
-        startDateAdjusted.setHours(startDateAdjusted.getHours() - 3); // Restar 3 horas
+        startDateAdjusted.setHours(startDateAdjusted.getHours() - 3);
 
         const horaInicio = startDateAdjusted.toLocaleTimeString('es-ES', {
           hour: '2-digit',
           minute: '2-digit'
         });
 
-        // Añadir un campo para cada reserva
         embed.addFields({
           name: `⏰${horaInicio} - ${reserva.description}`,
           value: reserva.resourceName,
@@ -280,7 +275,7 @@ client.on("interactionCreate", async (interaction) => {
       if (!db) {
           console.error("No se pudo obtener la instancia de la base de datos para interacción.");
           await interaction.reply({
-              content: "Hubo un error interno al conectar con la base de datos. Por favor, inténtalo de nuevo más tarde.",
+              content: "Hubo un error interno. Por favor, intentalo de nuevo más tarde :(",
               ephemeral: true
           });
           return;
@@ -316,7 +311,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 function tokenize(text) {
-  //cadena de texto en minúscula, elimina caractéres, divide la palabra y filtra
+  // Cadena de texto en minúscula, elimina caractéres, divide la palabra y filtra
   return text
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
@@ -324,7 +319,7 @@ function tokenize(text) {
     .filter(Boolean);
 }
 
-//escapa de los caractéres especiales
+// Escapa de los caractéres especiales
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -346,6 +341,7 @@ function normalizeText(text) {
  * @param {Array<Object>} reservas El arreglo de objetos de reserva.
  * @returns {Array<Object>} Un nuevo arreglo con las reservas filtradas.
  */
+
 function filtrarReservasPorPalabrasClave(reservas) {
     const palabrasClave = [
         "css",
@@ -383,13 +379,9 @@ function getNextWeekdayDate(targetDay, referenceDate = new Date()) {
     const today = new Date(referenceDate);
     today.setHours(0, 0, 0, 0); // Establecer a medianoche para comparar solo fechas
 
-    const currentDay = today.getDay(); // 0 (Domingo) - 6 (Sábado)
+    const currentDay = today.getDay();
     let daysToAdd = targetDay - currentDay;
 
-    // Si el día objetivo ya pasó esta semana, súmale 7 para ir a la próxima semana
-    // O si el día objetivo es hoy, pero ya pasó la hora del cálculo original.
-    // Para simplificar, si el día objetivo es igual al día actual y ya pasó, o si es un día anterior,
-    // se va a la siguiente semana.
     if (daysToAdd < 0) {
         daysToAdd += 7;
     }
